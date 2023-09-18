@@ -162,8 +162,9 @@ public class DFSPacket {
     final int checksumLen = checksumPos - checksumStart;
     final int pktLen = HdfsConstants.BYTES_IN_INTEGER + dataLen + checksumLen;
 
+    // Temporary placeholder 0 for opernationName
     PacketHeader header = new PacketHeader(
-        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, syncBlock);
+        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, 0, syncBlock);
 
     if (checksumPos != dataStart) {
       // Move the checksum to cover the gap. This can happen for the last

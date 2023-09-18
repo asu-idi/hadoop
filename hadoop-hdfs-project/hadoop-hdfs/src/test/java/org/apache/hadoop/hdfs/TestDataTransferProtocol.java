@@ -159,6 +159,7 @@ public class TestDataTransferProtocol {
       100,                 // sequencenumber
       true,                // lastPacketInBlock
       0,                   // chunk length
+      0,                    // operation name
       false);               // sync block
     hdr.write(sendOut);
     sendOut.writeInt(0);           // zero checksum
@@ -396,6 +397,7 @@ public class TestDataTransferProtocol {
       100,   // seqno
       false, // last packet
       -1 - random.nextInt(oneMil), // bad datalen
+      0,    // operation name
       false);
     hdr.write(sendOut);
 
@@ -416,6 +418,7 @@ public class TestDataTransferProtocol {
       100,   // sequencenumber
       true,  // lastPacketInBlock
       0,     // chunk length
+      0,     // operation name
       false);    
     hdr.write(sendOut);
     sendOut.writeInt(0);           // zero checksum
@@ -503,6 +506,7 @@ public class TestDataTransferProtocol {
       100,                 // sequencenumber
       false,               // lastPacketInBlock
       4096,                // chunk length
+      0,                   // operation name
       false);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     hdr.write(new DataOutputStream(baos));

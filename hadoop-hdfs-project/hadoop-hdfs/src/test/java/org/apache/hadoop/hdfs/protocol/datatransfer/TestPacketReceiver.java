@@ -41,8 +41,9 @@ public class TestPacketReceiver {
     DataOutputStream dos = new DataOutputStream(baos);
     
     int packetLen = data.length + sums.length + Ints.BYTES;
+    // Temporary placeholder 0 for opernationName
     PacketHeader header = new PacketHeader(
-        packetLen, OFFSET_IN_BLOCK, SEQNO, false, data.length, false);
+        packetLen, OFFSET_IN_BLOCK, SEQNO, false, data.length, 0, false);
     header.write(dos);
     
     dos.write(sums);
