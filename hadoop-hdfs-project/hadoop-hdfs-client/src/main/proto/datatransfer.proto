@@ -237,8 +237,8 @@ message PacketHeaderProto {
   required sfixed64 seqno = 2;
   required bool lastPacketInBlock = 3;
   required sfixed32 dataLen = 4;
-  optional sfixed32 operationName = 5 [default = 0];
-  optional bool syncBlock = 6 [default = false];
+  optional bool syncBlock = 5 [default = false];
+  optional sfixed32 opCode = 6 [default = -1];
 }
 
 // Status is a 4-bit enum

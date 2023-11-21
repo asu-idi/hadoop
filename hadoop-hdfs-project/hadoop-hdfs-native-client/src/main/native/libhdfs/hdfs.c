@@ -928,27 +928,6 @@ static jthrowable getDefaultBlockSize(JNIEnv *env, jobject jFS,
     return NULL;
 }
 
-// Function responsible for creating the writable file that is passsed to Append in rocksdb plugin
-hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags,
-                      int bufferSize, short replication, tSize blockSize, 
-                      int opCode)
-{
-    struct hdfsStreamBuilder *bld = hdfsStreamBuilderAlloc(fs, path, flags);
-    if (bufferSize != 0) {
-      hdfsStreamBuilderSetBufferSize(bld, bufferSize);
-    }
-    if (replication != 0) {
-      hdfsStreamBuilderSetReplication(bld, replication);
-    }
-    if (blockSize != 0) {
-      hdfsStreamBuilderSetDefaultBlockSize(bld, blockSize);
-    }
-    if (opcode != 0) {
-      hdfsStreamBuilderSetOpCode(bld, opCode);
-    }
-    return hdfsStreamBuilderBuild(bld);
-}
-
 hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags,
                       int bufferSize, short replication, tSize blockSize)
 {
@@ -971,7 +950,6 @@ struct hdfsStreamBuilder {
     int32_t bufferSize;
     int16_t replication;
     int64_t defaultBlockSize;
-    int16_t opCode;
     char path[1];
 };
 
@@ -1036,17 +1014,6 @@ int hdfsStreamBuilderSetDefaultBlockSize(struct hdfsStreamBuilder *bld,
     return 0;
 }
 
-int hdfsStreamBuilderSetOpCode(struct hdfsStreamBuilder *bld,
-                               int64_t opCode)
-{
-    if ((bld->flags & O_ACCMODE) != O_WRONLY) {
-        errno = EINVAL;
-        return -1;
-    }
-    bld->opCode = opCode;
-    return 0;
-}
-
 /**
  * Delegates to FsDataInputStream#hasCapability(String). Used to check if a
  * given input stream supports certain methods, such as
@@ -1101,202 +1068,6 @@ done:
         return 1;
     }
     return 0;
-}
-
-static hdfsFile hdfsOpenFileImpl(hdfsFS fs, const char *path, int flags,
-                  int32_t bufferSize, int16_t replication, int64_t blockSize, 
-                  int64_t opCode)
-{
-    /*
-      JAVA EQUIVALENT:
-       File f = new File(path);
-       FSData{Input|Output}Stream f{is|os} = fs.create(f);
-       return f{is|os};
-    */
-    int accmode = flags & O_ACCMODE;
-    jstring jStrBufferSize = NULL, jStrReplication = NULL;
-    jobject jConfiguration = NULL, jPath = NULL, jFile = NULL;
-    jobject jFS = (jobject)fs;
-    jthrowable jthr;
-    jvalue jVal;
-    hdfsFile file = NULL;
-    int ret;
-    jint jBufferSize = bufferSize;
-    jshort jReplication = replication;
-
-    /* The hadoop java api/signature */
-    const char *method = NULL;
-    const char *signature = NULL;
-
-    /* Get the JNIEnv* corresponding to current thread */
-    JNIEnv* env = getJNIEnv();
-    if (env == NULL) {
-      errno = EINTERNAL;
-      return NULL;
-    }
-
-
-    if (accmode == O_RDONLY || accmode == O_WRONLY) {
-	/* yay */
-    } else if (accmode == O_RDWR) {
-      fprintf(stderr, "ERROR: cannot open an hdfs file in O_RDWR mode\n");
-      errno = ENOTSUP;
-      return NULL;
-    } else {
-      fprintf(stderr, "ERROR: cannot open an hdfs file in mode 0x%x\n",
-              accmode);
-      errno = EINVAL;
-      return NULL;
-    }
-
-    if ((flags & O_CREAT) && (flags & O_EXCL)) {
-      fprintf(stderr,
-              "WARN: hdfs does not truly support O_CREATE && O_EXCL\n");
-    }
-
-    // Signatures need to be adjusted based on opcode as well..
-    if (accmode == O_RDONLY) {
-        method = "open";
-        signature = JMETHOD2(JPARAM(HADOOP_PATH), "I", JPARAM(HADOOP_FSDISTRM));
-    } else if (flags & O_APPEND) {
-        method = "append";
-        signature = JMETHOD1(JPARAM(HADOOP_PATH), JPARAM(HADOOP_FSDOSTRM));
-    } else {
-        method = "create";
-        signature = JMETHOD2(JPARAM(HADOOP_PATH), "ZISJ", JPARAM(HADOOP_FSDOSTRM));
-    }
-
-    /* Create an object of org.apache.hadoop.fs.Path */
-    jthr = constructNewObjectOfPath(env, path, &jPath);
-    if (jthr) {
-        ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-            "hdfsOpenFile(%s): constructNewObjectOfPath", path);
-        goto done;
-    }
-
-    /* Get the Configuration object from the FileSystem object */
-    jthr = invokeMethod(env, &jVal, INSTANCE, jFS, JC_FILE_SYSTEM,
-            "getConf", JMETHOD1("", JPARAM(HADOOP_CONF)));
-    if (jthr) {
-        ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-            "hdfsOpenFile(%s): FileSystem#getConf", path);
-        goto done;
-    }
-    jConfiguration = jVal.l;
-
-    jStrBufferSize = (*env)->NewStringUTF(env, "io.file.buffer.size"); 
-    if (!jStrBufferSize) {
-        ret = printPendingExceptionAndFree(env, PRINT_EXC_ALL, "OOM");
-        goto done;
-    }
-    jStrReplication = (*env)->NewStringUTF(env, "dfs.replication");
-    if (!jStrReplication) {
-        ret = printPendingExceptionAndFree(env, PRINT_EXC_ALL, "OOM");
-        goto done;
-    }
-
-    if (!bufferSize) {
-        jthr = invokeMethod(env, &jVal, INSTANCE, jConfiguration,
-                JC_CONFIGURATION, "getInt",
-                "(Ljava/lang/String;I)I", jStrBufferSize, 4096);
-        if (jthr) {
-            ret = printExceptionAndFree(env, jthr, NOPRINT_EXC_FILE_NOT_FOUND |
-                NOPRINT_EXC_ACCESS_CONTROL | NOPRINT_EXC_UNRESOLVED_LINK,
-                "hdfsOpenFile(%s): Configuration#getInt(io.file.buffer.size)",
-                path);
-            goto done;
-        }
-        jBufferSize = jVal.i;
-    }
-
-    if ((accmode == O_WRONLY) && (flags & O_APPEND) == 0) {
-        if (!replication) {
-            jthr = invokeMethod(env, &jVal, INSTANCE, jConfiguration,
-                             JC_CONFIGURATION, "getInt",
-                             "(Ljava/lang/String;I)I", jStrReplication, 1);
-            if (jthr) {
-                ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-                    "hdfsOpenFile(%s): Configuration#getInt(dfs.replication)",
-                    path);
-                goto done;
-            }
-            jReplication = (jshort)jVal.i;
-        }
-    }
- 
-    /* Create and return either the FSDataInputStream or
-       FSDataOutputStream references jobject jStream */
-
-    // READ?
-    jlong jOpCode = opCode;
-    if (accmode == O_RDONLY) {
-        jthr = invokeMethod(env, &jVal, INSTANCE, jFS, JC_FILE_SYSTEM,
-                method, signature, jPath, jBufferSize, jOpCode);
-    }  else if ((accmode == O_WRONLY) && (flags & O_APPEND)) {
-        // WRITE/APPEND?
-       jthr = invokeMethod(env, &jVal, INSTANCE, jFS, JC_FILE_SYSTEM,
-               method, signature, jPath, jopCode);
-    } else {
-        // WRITE/CREATE
-        jboolean jOverWrite = 1;
-        jlong jBlockSize = blockSize;
-
-        if (jBlockSize == 0) {
-            jthr = getDefaultBlockSize(env, jFS, jPath, &jBlockSize);
-            if (jthr) {
-                ret = EIO;
-                goto done;
-            }
-        }
-        jthr = invokeMethod(env, &jVal, INSTANCE, jFS, JC_FILE_SYSTEM,
-                method, signature, jPath, jOverWrite, jBufferSize,
-                jReplication, jBlockSize, jopCode);
-    }
-    if (jthr) {
-        ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-            "hdfsOpenFile(%s): FileSystem#%s(%s)", path, method, signature);
-        goto done;
-    }
-    jFile = jVal.l;
-
-    file = calloc(1, sizeof(struct hdfsFile_internal));
-    if (!file) {
-        fprintf(stderr, "hdfsOpenFile(%s): OOM create hdfsFile\n", path);
-        ret = ENOMEM;
-        goto done;
-    }
-    file->file = (*env)->NewGlobalRef(env, jFile);
-    if (!file->file) {
-        ret = printPendingExceptionAndFree(env, PRINT_EXC_ALL,
-            "hdfsOpenFile(%s): NewGlobalRef", path); 
-        goto done;
-    }
-    file->type = (((flags & O_WRONLY) == 0) ? HDFS_STREAM_INPUT :
-        HDFS_STREAM_OUTPUT);
-    file->flags = 0;
-
-    if ((flags & O_WRONLY) == 0) {
-        setFileFlagCapabilities(file, jFile);
-    }
-    ret = 0;
-
-done:
-    destroyLocalReference(env, jStrBufferSize);
-    destroyLocalReference(env, jStrReplication);
-    destroyLocalReference(env, jConfiguration);
-    destroyLocalReference(env, jPath);
-    destroyLocalReference(env, jFile);
-    if (ret) {
-        if (file) {
-            if (file->file) {
-                (*env)->DeleteGlobalRef(env, file->file);
-            }
-            free(file);
-        }
-        errno = ret;
-        return NULL;
-    }
-    return file;
 }
 
 static hdfsFile hdfsOpenFileImpl(hdfsFS fs, const char *path, int flags,
@@ -2071,6 +1842,24 @@ int preadFullyDirect(hdfsFS fs, hdfsFile f, tOffset position, void* buffer,
         return -1;
     }
     return 0;
+}
+
+// Function with opcode
+// TODO: Fix and test 
+tsize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
+{
+    void *newBuffer = malloc(length + "$/0/0opCode" + 1);
+    memcpy(newBuffer, buffer, length);
+
+    // Append opcode sequence
+    memcpy(newBuffer + length, "$/0/0opCode", 11);
+    length += 11;
+
+    // Append opcode
+    memcpy(newBuffer + length, opcode, 1);
+    length += 1;
+
+    return hdfsWrite(fs, f, buffer, length);
 }
 
 tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length)

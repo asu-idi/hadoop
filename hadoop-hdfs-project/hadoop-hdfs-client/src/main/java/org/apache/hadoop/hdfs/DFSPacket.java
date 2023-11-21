@@ -49,6 +49,7 @@ public class DFSPacket {
   private final int maxChunks; // max chunks in packet
   private byte[] buf;
   private final boolean lastPacketInBlock; // is this the last packet in block?
+  private int opCode; // operation type of this packet
 
   /**
    * buf is pointed into like follows:
@@ -88,6 +89,34 @@ public class DFSPacket {
     this.numChunks = 0;
     this.offsetInBlock = offsetInBlock;
     this.seqno = seqno;
+
+    this.buf = buf;
+
+    checksumStart = PacketHeader.PKT_MAX_HEADER_LEN;
+    checksumPos = checksumStart;
+    dataStart = checksumStart + (chunksPerPkt * checksumSize);
+    dataPos = dataStart;
+    maxChunks = chunksPerPkt;
+  }
+
+  /**
+   * Create a new packet.
+   *
+   * @param buf the buffer storing data and checksums
+   * @param chunksPerPkt maximum number of chunks per packet.
+   * @param offsetInBlock offset in bytes into the HDFS block.
+   * @param seqno the sequence number of this packet
+   * @param checksumSize the size of checksum
+   * @param lastPacketInBlock if this is the last packet
+   * @param opCode the opcode for this packet
+   */
+  public DFSPacket(byte[] buf, int chunksPerPkt, long offsetInBlock, long seqno,
+                   int checksumSize, boolean lastPacketInBlock, int operCode) {
+    this.lastPacketInBlock = lastPacketInBlock;
+    this.numChunks = 0;
+    this.offsetInBlock = offsetInBlock;
+    this.seqno = seqno;
+    this.opCode = operCode;
 
     this.buf = buf;
 
@@ -162,9 +191,8 @@ public class DFSPacket {
     final int checksumLen = checksumPos - checksumStart;
     final int pktLen = HdfsConstants.BYTES_IN_INTEGER + dataLen + checksumLen;
 
-    // Temporary placeholder 0 for opernationName
     PacketHeader header = new PacketHeader(
-        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, 0, syncBlock);
+        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, syncBlock, opCode);
 
     if (checksumPos != dataStart) {
       // Move the checksum to cover the gap. This can happen for the last
@@ -284,6 +312,15 @@ public class DFSPacket {
    */
   synchronized void setSyncBlock(boolean syncBlock) {
     this.syncBlock = syncBlock;
+  }
+
+  /**
+   * set if opCode
+   *
+   * @param opCode if to operation code
+   */
+  synchronized void setOpCode(int opCode) {
+    this.opCode = opCode;
   }
 
   @Override

@@ -47,7 +47,7 @@ public class FSDataOutputStream extends DataOutputStream
       statistics = stats;
       position = pos;
     }
-
+    
     @Override
     public void write(int b) throws IOException {
       out.write(b);

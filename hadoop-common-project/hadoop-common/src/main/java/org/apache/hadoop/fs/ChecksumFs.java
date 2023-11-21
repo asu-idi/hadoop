@@ -384,6 +384,15 @@ public abstract class ChecksumFs extends FilterFs {
       sums.write(checksum, ckoff, cklen);
     }
 
+    // We ignore the opcode for ChecksumFS
+    @Override
+    protected void writeChunk(byte[] b, int offset, int len, byte[] checksum,
+        int ckoff, int cklen, int opcode)
+      throws IOException {
+      datas.write(b, offset, len);
+      sums.write(checksum, ckoff, cklen);
+    }
+
     @Override
     protected void checkClosed() throws IOException {
       if (isClosed) {

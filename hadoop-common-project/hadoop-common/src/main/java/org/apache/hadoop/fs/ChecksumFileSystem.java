@@ -460,6 +460,15 @@ public abstract class ChecksumFileSystem extends FilterFileSystem {
       sums.write(checksum, ckoff, cklen);
     }
 
+    // We ignore opcode here
+    @Override
+    protected void writeChunk(byte[] b, int offset, int len, byte[] checksum,
+        int ckoff, int cklen, int opcode)
+    throws IOException {
+      datas.write(b, offset, len);
+      sums.write(checksum, ckoff, cklen);
+    }
+
     @Override
     protected void checkClosed() throws IOException {
       if (isClosed) {

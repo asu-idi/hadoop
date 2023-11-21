@@ -26,6 +26,8 @@ import org.apache.htrace.core.TraceScope;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.Checksum;
+import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 
 /**
  * This is a generic output stream for generating checksums for
@@ -62,7 +64,15 @@ abstract public class FSOutputSummer extends OutputStream implements
    */
   protected abstract void writeChunk(byte[] b, int bOffset, int bLen,
       byte[] checksum, int checksumOffset, int checksumLen) throws IOException;
-  
+
+  /* write the data chunk in <code>b</code> staring at <code>offset</code> with
+    * a length of <code>len > 0</code>, and its checksum
+    * Lets add the opCode as well :)
+    */  
+  protected abstract void writeChunk(byte[] b, int bOffset, int bLen,
+      byte[] checksum, int checksumOffset, int checksumLen, int opCode) throws IOException;
+
+
   /**
    * Check if the implementing OutputStream is closed and should no longer
    * accept writes. Implementations should do nothing if this stream is not
@@ -104,13 +114,69 @@ abstract public class FSOutputSummer extends OutputStream implements
       throws IOException {
     
     checkClosed();
+    int opcode = -1;
     
     if (off < 0 || len < 0 || off > b.length - len) {
       throw new ArrayIndexOutOfBoundsException();
     }
 
-    for (int n=0;n<len;n+=write1(b, off+n, len-n)) {
+    // check if the array has a specific string between n and n-1 at the end.
+    // If yes, we need to remove that string from the array before writing
+    // store that as opcode and call appropriate write1 method.
+    if (b.length > 12) {
+      
+      // extract opcode string, n-2 to n-12 bytes
+      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 12, b.length - 1);
+      String opcodeString = new String(opcodeBytes, StandardCharsets.UTF_8);
+
+      // check if opcode string is present
+      if (opcodeString.equals("$/0/0opCode")) {
+        // if present, extract opcode, the last byte of the array and convert to int
+        opcode = Integer.parseInt(new String(Arrays.copyOfRange(b, b.length - 1, b.length), StandardCharsets.UTF_8));
+
+        // remove opcode string and opcode from the array
+        len -= 12;
+      }
     }
+
+    if (opcode != -1) {
+      for (int n = 0; n < len; n += write1(b, off + n, len - n, opcode)) {
+      }
+    } else {
+      for (int n = 0; n < len; n += write1(b, off + n, len - n)) {
+      }
+    }
+
+    // for (int n=0;n<len;n+=write1(b, off+n, len-n)) {
+    // }
+  }
+
+  /**
+   * Write a portion of an array, flushing to the underlying
+   * stream at most once if necessary.
+   * Make sure that opCode is also passed while calling this API.
+   */
+  private int write1(byte b[], int off, int len, int opCode)
+      throws IOException {
+    if (count == 0 && len >= buf.length) {
+      // local buffer is empty and user buffer size >= local buffer size, so
+      // simply checksum the user buffer and send it directly to the underlying
+      // stream
+      final int length = buf.length;
+      writeChecksumChunks(b, off, length, opCode);
+      return length;
+    }
+
+    // copy user data to local buffer
+    int bytesToCopy = buf.length - count;
+    bytesToCopy = (len < bytesToCopy) ? len : bytesToCopy;
+    System.arraycopy(b, off, buf, count, bytesToCopy);
+    count += bytesToCopy;
+    if (count == buf.length) {
+      // local buffer is full
+      flushBuffer();
+    }
+    return bytesToCopy;
   }
   
   /**
@@ -203,6 +269,30 @@ abstract public class FSOutputSummer extends OutputStream implements
   protected TraceScope createWriteTraceScope() {
     return null;
   }
+
+
+  /** Generate checksums for the given data chunks and output chunks & checksums
+   * to the underlying output stream.
+   * Lets add the opcode
+   */
+  private void writeChecksumChunks(byte b[], int off, int len, int opCode)
+  throws IOException {
+    sum.calculateChunkedSums(b, off, len, checksum, 0);
+    TraceScope scope = createWriteTraceScope();
+    try {
+      for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
+        int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);
+        int ckOffset = i / sum.getBytesPerChecksum() * getChecksumSize();
+        writeChunk(b, off + i, chunkLen, checksum, ckOffset,
+            getChecksumSize(), opCode);
+      }
+    } finally {
+      if (scope != null) {
+        scope.close();
+      }
+    }
+  }
+
 
   /** Generate checksums for the given data chunks and output chunks & checksums
    * to the underlying output stream.

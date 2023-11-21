@@ -147,6 +147,27 @@ public class DFSOutputStream extends FSOutputSummer
         getChecksumSize(), lastPacketInBlock);
   }
 
+  protected DFSPacket createPacket(int packetSize, int chunksPerPkt,
+      long offsetInBlock, long seqno, boolean lastPacketInBlock, int opCode)
+      throws InterruptedIOException {
+    final byte[] buf;
+    final int bufferSize = PacketHeader.PKT_MAX_HEADER_LEN + packetSize;
+
+    try {
+      buf = byteArrayManager.newByteArray(bufferSize);
+    } catch (InterruptedException ie) {
+      final InterruptedIOException iioe = new InterruptedIOException(
+          "seqno=" + seqno);
+      iioe.initCause(ie);
+      throw iioe;
+    }
+
+    return new DFSPacket(buf, chunksPerPkt, offsetInBlock, seqno,
+        getChecksumSize(), lastPacketInBlock, opCode);
+  }
+
+
+
   @Override
   protected void checkClosed() throws IOException {
     if (isClosed()) {
@@ -441,6 +462,24 @@ public class DFSOutputStream extends FSOutputSummer
     }
   }
 
+  @Override
+  protected synchronized void writeChunk(byte[] b, int offset, int len,
+      byte[] checksum, int ckoff, int cklen, int opCode) throws IOException {
+    writeChunkPrepare(len, ckoff, cklen, opCode);
+
+    currentPacket.writeChecksum(checksum, ckoff, cklen);
+    currentPacket.writeData(b, offset, len);
+    currentPacket.incNumChunks();
+    getStreamer().incBytesCurBlock(len);
+
+    // If packet is full, enqueue it for transmission
+    if (currentPacket.getNumChunks() == currentPacket.getMaxChunks() ||
+        getStreamer().getBytesCurBlock() == blockSize) {
+      enqueueCurrentPacketFull();
+    }
+  }
+
+
   /* write the data chunk in <code>buffer</code> staring at
   * <code>buffer.position</code> with
   * a length of <code>len > 0</code>, and its checksum
@@ -460,6 +499,32 @@ public class DFSOutputStream extends FSOutputSummer
       enqueueCurrentPacketFull();
     }
   }
+
+  private synchronized void writeChunkPrepare(int buflen,
+      int ckoff, int cklen, int opCode) throws IOException {
+    dfsClient.checkOpen();
+    checkClosed();
+
+    if (buflen > bytesPerChecksum) {
+      throw new IOException("writeChunk() buffer size is " + buflen +
+                            " is larger than supported  bytesPerChecksum " +
+                            bytesPerChecksum);
+    }
+    if (cklen != 0 && cklen != getChecksumSize()) {
+      throw new IOException("writeChunk() checksum size is supposed to be " +
+                            getChecksumSize() + " but found to be " + cklen);
+    }
+
+    if (currentPacket == null) {
+      currentPacket = createPacket(packetSize, chunksPerPacket, getStreamer()
+          .getBytesCurBlock(), getStreamer().getAndIncCurrentSeqno(), false, opCode);
+      DFSClient.LOG.debug("WriteChunk allocating new packet seqno={},"
+              + " src={}, packetSize={}, chunksPerPacket={}, bytesCurBlock={}",
+          currentPacket.getSeqno(), src, packetSize, chunksPerPacket,
+          getStreamer().getBytesCurBlock() + ", " + this);
+    }
+  }
+
 
   private synchronized void writeChunkPrepare(int buflen,
       int ckoff, int cklen) throws IOException {
