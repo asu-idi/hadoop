@@ -115,6 +115,7 @@ abstract public class FSOutputSummer extends OutputStream implements
     
     checkClosed();
     int opcode = -1;
+    String opCodeStr = "$/0/0opCode";
     
     if (off < 0 || len < 0 || off > b.length - len) {
       throw new ArrayIndexOutOfBoundsException();
@@ -125,17 +126,19 @@ abstract public class FSOutputSummer extends OutputStream implements
     // store that as opcode and call appropriate write1 method.
     if (b.length > 12) {
       
-      // extract opcode string, n-2 to n-12 bytes
-      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 12, b.length - 1);
+      // extract opcode string, n-sizeof(int) to n-sizeof(int)-sizeof(opcodestr) bytes
+      // sizeof(int) is 4 bytes
+      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 4 - opCodeStr.length(), b.length - 4);
       String opcodeString = new String(opcodeBytes, StandardCharsets.UTF_8);
 
       // check if opcode string is present
-      if (opcodeString.equals("$/0/0opCode")) {
+      if (opcodeString.equals(opCodeStr)) {
         // if present, extract opcode, the last byte of the array and convert to int
-        opcode = Integer.parseInt(new String(Arrays.copyOfRange(b, b.length - 1, b.length), StandardCharsets.UTF_8));
+        opcode = Integer.parseInt(new String(Arrays.copyOfRange(b, b.length - 4, b.length), StandardCharsets.UTF_8));
 
         // remove opcode string and opcode from the array
-        len -= 12;
+        len -= opCodeStr.length();
+        len -= 4;
       }
     }
 

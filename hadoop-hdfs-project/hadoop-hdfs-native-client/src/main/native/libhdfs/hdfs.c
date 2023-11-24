@@ -1848,16 +1848,17 @@ int preadFullyDirect(hdfsFS fs, hdfsFile f, tOffset position, void* buffer,
 // TODO: Fix and test 
 tsize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
 {
-    void *newBuffer = malloc(length + "$/0/0opCode" + 1);
+    std::string opCodeStr = "$/0/0opCode";
+    void *newBuffer = malloc(length + sizeof(opCodeStr) + sizeof(opcode));
     memcpy(newBuffer, buffer, length);
 
     // Append opcode sequence
-    memcpy(newBuffer + length, "$/0/0opCode", 11);
-    length += 11;
+    memcpy(newBuffer + length, "$/0/0opCode", sizeof(opCodeStr));
+    length += sizeof(opCodeStr);
 
     // Append opcode
-    memcpy(newBuffer + length, opcode, 1);
-    length += 1;
+    memcpy(newBuffer + length, opcode, sizeof(opcode));
+    length += sizeof(opcode);
 
     return hdfsWrite(fs, f, buffer, length);
 }
