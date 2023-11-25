@@ -1844,25 +1844,6 @@ int preadFullyDirect(hdfsFS fs, hdfsFile f, tOffset position, void* buffer,
     return 0;
 }
 
-// Function with opcode
-// TODO: Fix and test 
-tsize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
-{
-    std::string opCodeStr = "$/0/0opCode";
-    void *newBuffer = malloc(length + sizeof(opCodeStr) + sizeof(opcode));
-    memcpy(newBuffer, buffer, length);
-
-    // Append opcode sequence
-    memcpy(newBuffer + length, "$/0/0opCode", sizeof(opCodeStr));
-    length += sizeof(opCodeStr);
-
-    // Append opcode
-    memcpy(newBuffer + length, opcode, sizeof(opcode));
-    length += sizeof(opcode);
-
-    return hdfsWrite(fs, f, buffer, length);
-}
-
 tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length)
 {
     // JAVA EQUIVALENT
@@ -1933,6 +1914,25 @@ tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length)
     // Unlike most Java streams, FSDataOutputStream never does partial writes.
     // If we succeeded, all the data was written.
     return length;
+}
+
+// Function with opcode
+// TODO: Fix and test 
+tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
+{
+    void *newBuffer = malloc(length + sizeof("$/0/0opCode") + sizeof(opcode));
+    memcpy(newBuffer, buffer, length);
+
+    // Append opcode sequence
+    memcpy(newBuffer + length, "$/0/0opCode", sizeof("$/0/0opCode"));
+    length += sizeof("$/0/0opCode");
+
+    // Append opcode as str
+    // convert int to bytes
+    memcpy(newBuffer + length, &opcode, sizeof(opcode));
+    length += sizeof(opcode);
+
+    return hdfsWrite(fs, f, buffer, length);
 }
 
 int hdfsSeek(hdfsFS fs, hdfsFile f, tOffset desiredPos) 

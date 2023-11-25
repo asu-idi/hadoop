@@ -643,6 +643,8 @@ extern  "C" {
     LIBHDFS_EXTERNAL
     tSize hdfsWrite(hdfsFS fs, hdfsFile file, const void* buffer,
                     tSize length);
+    tSize hdfsWrite(hdfsFS fs, hdfsFile file, const void* buffer,
+                    tSize length, int opCode);
 
 
     /** 
