@@ -643,7 +643,18 @@ extern  "C" {
     LIBHDFS_EXTERNAL
     tSize hdfsWrite(hdfsFS fs, hdfsFile file, const void* buffer,
                     tSize length);
-    tSize hdfsWrite(hdfsFS fs, hdfsFile file, const void* buffer,
+
+    /** 
+     * hdfsWrite - Write data into an open file with operation awareness.
+     * @param fs The configured filesystem handle.
+     * @param file The file handle.
+     * @param buffer The data.
+     * @param length The no. of bytes to write.
+     * @param opCode The operation code from the caller.
+     * @return Returns the number of bytes written, -1 on error.
+     */
+    LIBHDFS_EXTERNAL
+    tSize hdfsWriteOp(hdfsFS fs, hdfsFile file, const void* buffer,
                     tSize length, int opCode);
 
 

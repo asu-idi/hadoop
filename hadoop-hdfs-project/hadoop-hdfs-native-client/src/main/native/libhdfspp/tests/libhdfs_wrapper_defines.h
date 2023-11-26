@@ -49,6 +49,7 @@
 #define hdfsPread libhdfs_hdfsPread
 #define hdfsPreadFully libhdfs_hdfsPreadFully
 #define hdfsWrite libhdfs_hdfsWrite
+#define hdfsWriteOp libhdfs_hdfsWriteOp
 #define hdfsFlush libhdfs_hdfsFlush
 #define hdfsHFlush libhdfs_hdfsHFlush
 #define hdfsHSync libhdfs_hdfsHSync

@@ -1918,7 +1918,7 @@ tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length)
 
 // Function with opcode
 // TODO: Fix and test 
-tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
+tSize hdfsWriteOp(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
 {
     void *newBuffer = malloc(length + sizeof("$/0/0opCode") + sizeof(opcode));
     memcpy(newBuffer, buffer, length);
