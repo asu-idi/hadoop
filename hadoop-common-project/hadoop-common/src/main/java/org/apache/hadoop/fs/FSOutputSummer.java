@@ -128,16 +128,17 @@ abstract public class FSOutputSummer extends OutputStream implements
       
       // extract opcode string, n-sizeof(int) to n-sizeof(int)-sizeof(opcodestr) bytes
       // sizeof(int) is 4 bytes
-      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 4 - opCodeStr.length(), b.length - 4);
+      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 4 - opCodeStr.length() - 1, b.length - 4);
       String opcodeString = new String(opcodeBytes, StandardCharsets.UTF_8);
 
       // check if opcode string is present
-      if (opcodeString.equals(opCodeStr)) {
+      if (opcodeString.trim().equals(opCodeStr)) {
         // if present, extract opcode, the last byte of the array and convert to int
-        opcode = Integer.parseInt(new String(Arrays.copyOfRange(b, b.length - 4, b.length), StandardCharsets.UTF_8));
+        int index = b.length - 4;
+        opcode = (b[index] & 0xFF) | ((b[index + 1] & 0xFF) << 8) | ((b[index + 2] & 0xFF) << 16) | ((b[index + 3] & 0xFF) << 24);
 
         // remove opcode string and opcode from the array
-        len -= opCodeStr.length();
+        len -= opcodeString.length();
         len -= 4;
       }
     }
@@ -177,7 +178,7 @@ abstract public class FSOutputSummer extends OutputStream implements
     count += bytesToCopy;
     if (count == buf.length) {
       // local buffer is full
-      flushBuffer();
+      flushBuffer(opCode);
     }
     return bytesToCopy;
   }
@@ -211,6 +212,11 @@ abstract public class FSOutputSummer extends OutputStream implements
   /* Forces any buffered output bytes to be checksumed and written out to
    * the underlying output stream. 
    */
+
+  protected synchronized void flushBuffer(int opCode) throws IOException {
+    flushBuffer(false, true, opCode);
+  }
+
   protected synchronized void flushBuffer() throws IOException {
     flushBuffer(false, true);
   }
@@ -225,6 +231,26 @@ abstract public class FSOutputSummer extends OutputStream implements
    * Returns the number of bytes that were flushed but are still left in the
    * buffer (can only be non-zero if keep is true).
    */
+
+  protected synchronized int flushBuffer(boolean keep,
+      boolean flushPartial, int opCode) throws IOException {
+    int bufLen = count;
+    int partialLen = bufLen % sum.getBytesPerChecksum();
+    int lenToFlush = flushPartial ? bufLen : bufLen - partialLen;
+    if (lenToFlush != 0) {
+      writeChecksumChunks(buf, 0, lenToFlush, opCode);
+      if (!flushPartial || keep) {
+        count = partialLen;
+        System.arraycopy(buf, bufLen - count, buf, 0, count);
+      } else {
+        count = 0;
+      }
+    }
+
+    // total bytes left minus unflushed bytes left
+    return count - (bufLen - lenToFlush);
+  }
+
   protected synchronized int flushBuffer(boolean keep,
       boolean flushPartial) throws IOException {
     int bufLen = count;

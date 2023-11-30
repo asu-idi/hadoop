@@ -1932,7 +1932,7 @@ tSize hdfsWriteOp(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int o
     memcpy(newBuffer + length, &opcode, sizeof(opcode));
     length += sizeof(opcode);
 
-    return hdfsWrite(fs, f, buffer, length);
+    return hdfsWrite(fs, f, newBuffer, length);
 }
 
 int hdfsSeek(hdfsFS fs, hdfsFile f, tOffset desiredPos) 
