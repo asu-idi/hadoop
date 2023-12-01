@@ -89,7 +89,8 @@ public class DFSPacket {
     this.numChunks = 0;
     this.offsetInBlock = offsetInBlock;
     this.seqno = seqno;
-
+    this.opCode = -1;
+    
     this.buf = buf;
 
     checksumStart = PacketHeader.PKT_MAX_HEADER_LEN;
