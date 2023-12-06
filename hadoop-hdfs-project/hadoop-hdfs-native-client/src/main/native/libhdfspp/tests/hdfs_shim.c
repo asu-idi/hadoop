@@ -328,11 +328,6 @@ tSize hdfsWrite(hdfsFS fs, hdfsFile file, const void* buffer,
   return libhdfs_hdfsWrite(fs->libhdfsRep, file->libhdfsRep, buffer, length);
 }
 
-tSize hdfsWriteOp(hdfsFS fs, hdfsFile file, const void* buffer,
-                tSize length, int opCode) {
-  return libhdfs_hdfsWriteOp(fs->libhdfsppRep, file->libhdfsppRep, buffer, length, opCode);
-}
-
 int hdfsFlush(hdfsFS fs, hdfsFile file) {
   return libhdfs_hdfsFlush(fs->libhdfsRep, file->libhdfsRep);
 }

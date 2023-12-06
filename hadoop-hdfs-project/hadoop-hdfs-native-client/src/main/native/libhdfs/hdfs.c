@@ -1916,25 +1916,6 @@ tSize hdfsWrite(hdfsFS fs, hdfsFile f, const void* buffer, tSize length)
     return length;
 }
 
-// Function with opcode
-// TODO: Fix and test 
-tSize hdfsWriteOp(hdfsFS fs, hdfsFile f, const void* buffer, tSize length, int opcode) 
-{
-    void *newBuffer = malloc(length + sizeof("$/0/0opCode") + sizeof(opcode));
-    memcpy(newBuffer, buffer, length);
-
-    // Append opcode sequence
-    memcpy(newBuffer + length, "$/0/0opCode", sizeof("$/0/0opCode"));
-    length += sizeof("$/0/0opCode");
-
-    // Append opcode as str
-    // convert int to bytes
-    memcpy(newBuffer + length, &opcode, sizeof(opcode));
-    length += sizeof(opcode);
-
-    return hdfsWrite(fs, f, newBuffer, length);
-}
-
 int hdfsSeek(hdfsFS fs, hdfsFile f, tOffset desiredPos) 
 {
     // JAVA EQUIVALENT

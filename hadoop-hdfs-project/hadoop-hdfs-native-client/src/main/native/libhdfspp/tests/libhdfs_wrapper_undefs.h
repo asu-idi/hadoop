@@ -49,7 +49,6 @@
 #undef hdfsPread
 #undef hdfsPreadFully
 #undef hdfsWrite
-#undef hdfsWriteOp
 #undef hdfsFlush
 #undef hdfsHFlush
 #undef hdfsHSync

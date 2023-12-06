@@ -115,7 +115,7 @@ abstract public class FSOutputSummer extends OutputStream implements
     
     checkClosed();
     int opcode = -1;
-    String opCodeStr = "$/0/0opCode";
+    String opEncodingString = "$/0/0opCode";
     
     if (off < 0 || len < 0 || off > b.length - len) {
       throw new ArrayIndexOutOfBoundsException();
@@ -126,20 +126,18 @@ abstract public class FSOutputSummer extends OutputStream implements
     // store that as opcode and call appropriate write1 method.
     if (b.length > 12) {
       
-      // extract opcode string, n-sizeof(int) to n-sizeof(int)-sizeof(opcodestr) bytes
-      // sizeof(int) is 4 bytes
-      byte[] opcodeBytes = Arrays.copyOfRange(b, b.length - 4 - opCodeStr.length() - 1, b.length - 4);
-      String opcodeString = new String(opcodeBytes, StandardCharsets.UTF_8);
+      // extract opcode string
+      String inputEncodingString = new String(
+          Arrays.copyOfRange(b, b.length - 1 - opEncodingString.length(), b.length - 1),
+          StandardCharsets.UTF_8);
+      String inputOpCodeString = new String(b, b.length - 1, 1, StandardCharsets.UTF_8);
 
       // check if opcode string is present
-      if (opcodeString.trim().equals(opCodeStr)) {
+      if (inputEncodingString.trim().equals(opEncodingString)) {
         // if present, extract opcode, the last byte of the array and convert to int
-        int index = b.length - 4;
-        opcode = (b[index] & 0xFF) | ((b[index + 1] & 0xFF) << 8) | ((b[index + 2] & 0xFF) << 16) | ((b[index + 3] & 0xFF) << 24);
-
+        opcode = Integer.parseInt(inputOpCodeString);
         // remove opcode string and opcode from the array
-        len -= opcodeString.length();
-        len -= 4;
+        len = len - inputEncodingString.length() - 1;
       }
     }
 
