@@ -254,8 +254,35 @@ abstract public class FSOutputSummer extends OutputStream implements
     int bufLen = count;
     int partialLen = bufLen % sum.getBytesPerChecksum();
     int lenToFlush = flushPartial ? bufLen : bufLen - partialLen;
+
+    // Implementation to extract opcode from the buffer and call flushBuffer
+    // accordingly.
+    int opcode = -1;
+    String opEncodingString = "$/0/0opCode";
+
     if (lenToFlush != 0) {
-      writeChecksumChunks(buf, 0, lenToFlush);
+
+      extract opcode string
+      String inputEncodingString = new String(
+          Arrays.copyOfRange(buf, bufLen - 1 - opEncodingString.length(), bufLen - 1),
+          StandardCharsets.UTF_8);
+      String inputOpCodeString = new String(buf, bufLen - 1, 1, StandardCharsets.UTF_8);
+
+      // check if opcode string is present
+      if (inputEncodingString.trim().equals(opEncodingString)) {
+        // if present, extract opcode, the last byte of the array and convert to int
+        opcode = Integer.parseInt(inputOpCodeString);
+        // remove opcode string and opcode from the array
+        lenToFlush = lenToFlush - inputEncodingString.length() - 1;
+      }
+
+      if (opcode != -1) {
+        writeChecksumChunks(buf, 0, lenToFlush, opcode);
+      } else {
+        writeChecksumChunks(buf, 0, lenToFlush);
+      }
+
+      // writeChecksumChunks(buf, 0, lenToFlush);
       if (!flushPartial || keep) {
         count = partialLen;
         System.arraycopy(buf, bufLen - count, buf, 0, count);
