@@ -262,7 +262,7 @@ abstract public class FSOutputSummer extends OutputStream implements
 
     if (lenToFlush != 0) {
 
-      extract opcode string
+      // extract opcode string
       String inputEncodingString = new String(
           Arrays.copyOfRange(buf, bufLen - 1 - opEncodingString.length(), bufLen - 1),
           StandardCharsets.UTF_8);
