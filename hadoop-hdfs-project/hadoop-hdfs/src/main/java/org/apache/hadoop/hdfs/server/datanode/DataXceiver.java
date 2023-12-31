@@ -664,6 +664,18 @@ class DataXceiver extends Receiver implements Runnable {
   }
 
   @Override
+  public void readBlock(final ExtendedBlock block,
+      final Token<BlockTokenIdentifier> blockToken,
+      final String clientName,
+      final long blockOffset,
+      final long length,
+      final boolean sendChecksum,
+      final CachingStrategy cachingStrategy,
+      final int opcode) throws IOException {
+        // TODO
+      }
+
+  @Override
   public void writeBlock(final ExtendedBlock block,
       final StorageType storageType, 
       final Token<BlockTokenIdentifier> blockToken,

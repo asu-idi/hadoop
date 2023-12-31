@@ -191,6 +191,10 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   private Configuration configuration;
 
   /**
+   * opcode of RocksDB
+   */
+  private int opcode;
+  /**
    * Information about the domain socket path we should use to connect to the
    * local peer-- or null if we haven't examined the local domain socket.
    */
@@ -205,6 +209,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   public BlockReaderFactory(DfsClientConf conf) {
     this.conf = conf;
     this.remainingCacheTries = conf.getNumCachedConnRetry();
+    this.opcode = -1;
   }
 
   public BlockReaderFactory setFileName(String fileName) {
@@ -291,6 +296,12 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   public BlockReaderFactory setConfiguration(
       Configuration configuration) {
     this.configuration = configuration;
+    return this;
+  }
+
+  public BlockReaderFactory setOpCode(
+      int opcode) {
+    this.opcode = opcode;
     return this;
   }
 
@@ -855,6 +866,13 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   @SuppressWarnings("deprecation")
   private BlockReader getRemoteBlockReader(Peer peer) throws IOException {
     int networkDistance = clientContext.getNetworkDistance(datanode);
+    if (opcode != -1) {
+      return BlockReaderRemote.newBlockReader(
+        fileName, block, token, startOffset, length,
+        verifyChecksum, clientName, peer, datanode,
+        clientContext.getPeerCache(), cachingStrategy,
+        networkDistance, configuration, opcode);
+    }
     return BlockReaderRemote.newBlockReader(
         fileName, block, token, startOffset, length,
         verifyChecksum, clientName, peer, datanode,

@@ -73,6 +73,18 @@ public interface DataTransferProtocol {
       final boolean sendChecksum,
       final CachingStrategy cachingStrategy) throws IOException;
 
+   /**
+   * Read a block (with opcode aware).
+   */ 
+  void readBlock(final ExtendedBlock blk,
+      final Token<BlockTokenIdentifier> blockToken,
+      final String clientName,
+      final long blockOffset,
+      final long length,
+      final boolean sendChecksum,
+      final CachingStrategy cachingStrategy,
+      final int opcode) throws IOException;
+
   /**
    * Write a block to a datanode pipeline.
    * The receiver datanode of this call is the next datanode in the pipeline.

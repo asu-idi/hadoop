@@ -78,6 +78,7 @@ message OpReadBlockProto {
   required uint64 len = 3;
   optional bool sendChecksums = 4 [default = true];
   optional CachingStrategyProto cachingStrategy = 5;
+  optional uint32 opCode = 6;
 }
 
 message ChecksumProto {
