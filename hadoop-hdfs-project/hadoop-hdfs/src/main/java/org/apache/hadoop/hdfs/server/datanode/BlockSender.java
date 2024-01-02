@@ -668,6 +668,132 @@ class BlockSender implements java.io.Closeable {
 
     return dataLen;
   }
+
+  private int sendPacket(ByteBuffer pkt, int maxChunks, OutputStream out,
+      boolean transferTo, DataTransferThrottler throttler, int opcode) throws IOException {
+    int dataLen = (int) Math.min(endOffset - offset,
+                             (chunkSize * (long) maxChunks));
+    
+    System.out.println("sendPacket with opcode: " + opcode);
+    int numChunks = numberOfChunks(dataLen); // Number of chunks be sent in the packet
+    int checksumDataLen = numChunks * checksumSize;
+    int packetLen = dataLen + checksumDataLen + 4;
+    boolean lastDataPacket = offset + dataLen == endOffset && dataLen > 0;
+
+    // The packet buffer is organized as follows:
+    // _______HHHHCCCCD?D?D?D?
+    //        ^   ^
+    //        |   \ checksumOff
+    //        \ headerOff
+    // _ padding, since the header is variable-length
+    // H = header and length prefixes
+    // C = checksums
+    // D? = data, if transferTo is false.
+    
+    int headerLen = writePacketHeader(pkt, dataLen, packetLen, opcode);
+    
+    // Per above, the header doesn't start at the beginning of the
+    // buffer
+    int headerOff = pkt.position() - headerLen;
+    
+    int checksumOff = pkt.position();
+    byte[] buf = pkt.array();
+    
+    if (checksumSize > 0 && ris.getChecksumIn() != null) {
+      readChecksum(buf, checksumOff, checksumDataLen);
+
+      // write in progress that we need to use to get last checksum
+      if (lastDataPacket && lastChunkChecksum != null) {
+        int start = checksumOff + checksumDataLen - checksumSize;
+        byte[] updatedChecksum = lastChunkChecksum.getChecksum();
+        if (updatedChecksum != null) {
+          System.arraycopy(updatedChecksum, 0, buf, start, checksumSize);
+        }
+      }
+    }
+    
+    int dataOff = checksumOff + checksumDataLen;
+    if (!transferTo) { // normal transfer
+      try {
+        ris.readDataFully(buf, dataOff, dataLen);
+      } catch (IOException ioe) {
+        if (ioe.getMessage().startsWith(EIO_ERROR)) {
+          throw new DiskFileCorruptException("A disk IO error occurred", ioe);
+        }
+        throw ioe;
+      }
+
+      if (verifyChecksum) {
+        verifyChecksum(buf, dataOff, dataLen, numChunks, checksumOff);
+      }
+    }
+    
+    try {
+      if (transferTo) {
+        SocketOutputStream sockOut = (SocketOutputStream)out;
+        // First write header and checksums
+        sockOut.write(buf, headerOff, dataOff - headerOff);
+
+        // no need to flush since we know out is not a buffered stream
+        FileChannel fileCh = ((FileInputStream)ris.getDataIn()).getChannel();
+        LongWritable waitTime = new LongWritable();
+        LongWritable transferTime = new LongWritable();
+        fileIoProvider.transferToSocketFully(
+            ris.getVolumeRef().getVolume(), sockOut, fileCh, blockInPosition,
+            dataLen, waitTime, transferTime);
+        datanode.metrics.addSendDataPacketBlockedOnNetworkNanos(waitTime.get());
+        datanode.metrics.addSendDataPacketTransferNanos(transferTime.get());
+        blockInPosition += dataLen;
+      } else {
+        // normal transfer
+        out.write(buf, headerOff, dataOff + dataLen - headerOff);
+      }
+    } catch (IOException e) {
+      if (e instanceof SocketTimeoutException) {
+        /*
+         * writing to client timed out.  This happens if the client reads
+         * part of a block and then decides not to read the rest (but leaves
+         * the socket open).
+         * 
+         * Reporting of this case is done in DataXceiver#run
+         */
+      } else {
+        /* Exception while writing to the client. Connection closure from
+         * the other end is mostly the case and we do not care much about
+         * it. But other things can go wrong, especially in transferTo(),
+         * which we do not want to ignore.
+         *
+         * The message parsing below should not be considered as a good
+         * coding example. NEVER do it to drive a program logic. NEVER.
+         * It was done here because the NIO throws an IOException for EPIPE.
+         */
+        String ioem = e.getMessage();
+        if (ioem != null) {
+          /*
+           * If we got an EIO when reading files or transferTo the client
+           * socket, it's very likely caused by bad disk track or other file
+           * corruptions.
+           */
+          if (ioem.startsWith(EIO_ERROR)) {
+            throw new DiskFileCorruptException("A disk IO error occurred", e);
+          }
+          if (!ioem.startsWith("Broken pipe")
+              && !ioem.startsWith("Connection reset")) {
+            LOG.error("BlockSender.sendChunks() exception: ", e);
+            datanode.getBlockScanner().markSuspectBlock(
+                ris.getVolumeRef().getVolume().getStorageID(), block);
+          }
+        }
+      }
+      throw ioeToSocketException(e);
+    }
+
+    if (throttler != null) { // rebalancing so throttle
+      throttler.throttle(packetLen);
+    }
+
+    return dataLen;
+  }
   
   /**
    * Read checksum into given buffer
@@ -760,6 +886,18 @@ class BlockSender implements java.io.Closeable {
     }
   }
 
+  long sendBlock(DataOutputStream out, OutputStream baseStream, 
+                 DataTransferThrottler throttler, int opcode) throws IOException {
+    System.out.println("sendBlock with opcode: " + opcode);
+    final TraceScope scope = datanode.getTracer().
+        newScope("sendBlock_" + block.getBlockId());
+    try {
+      return doSendBlock(out, baseStream, throttler, opcode);
+    } finally {
+      scope.close();
+    }
+  }
+
   private long doSendBlock(DataOutputStream out, OutputStream baseStream,
         DataTransferThrottler throttler) throws IOException {
     if (out == null) {
@@ -837,6 +975,84 @@ class BlockSender implements java.io.Closeable {
     return totalRead;
   }
 
+  private long doSendBlock(DataOutputStream out, OutputStream baseStream,
+        DataTransferThrottler throttler, int opcode) throws IOException {
+    if (out == null) {
+      throw new IOException( "out stream is null" );
+    }
+    System.out.println("doSendBlock with opcode: " + opcode);
+    initialOffset = offset;
+    long totalRead = 0;
+    OutputStream streamForSendChunks = out;
+    
+    lastCacheDropOffset = initialOffset;
+
+    if (isLongRead() && ris.getDataInFd() != null) {
+      // Advise that this file descriptor will be accessed sequentially.
+      ris.dropCacheBehindReads(block.getBlockName(), 0, 0,
+          POSIX_FADV_SEQUENTIAL);
+    }
+    
+    // Trigger readahead of beginning of file if configured.
+    manageOsCache();
+
+    final long startTime = ClientTraceLog.isDebugEnabled() ? System.nanoTime() : 0;
+    try {
+      int maxChunksPerPacket;
+      int pktBufSize = PacketHeader.PKT_MAX_HEADER_LEN;
+      boolean transferTo = transferToAllowed && !verifyChecksum
+          && baseStream instanceof SocketOutputStream
+          && ris.getDataIn() instanceof FileInputStream;
+      if (transferTo) {
+        FileChannel fileChannel =
+            ((FileInputStream)ris.getDataIn()).getChannel();
+        blockInPosition = fileChannel.position();
+        streamForSendChunks = baseStream;
+        maxChunksPerPacket = numberOfChunks(TRANSFERTO_BUFFER_SIZE);
+        
+        // Smaller packet size to only hold checksum when doing transferTo
+        pktBufSize += checksumSize * maxChunksPerPacket;
+      } else {
+        maxChunksPerPacket = Math.max(1,
+            numberOfChunks(IO_FILE_BUFFER_SIZE));
+        // Packet size includes both checksum and data
+        pktBufSize += (chunkSize + checksumSize) * maxChunksPerPacket;
+      }
+
+      ByteBuffer pktBuf = ByteBuffer.allocate(pktBufSize);
+
+      while (endOffset > offset && !Thread.currentThread().isInterrupted()) {
+        manageOsCache();
+        long len = sendPacket(pktBuf, maxChunksPerPacket, streamForSendChunks,
+            transferTo, throttler, opcode);
+        offset += len;
+        totalRead += len + (numberOfChunks(len) * checksumSize);
+        seqno++;
+      }
+      // If this thread was interrupted, then it did not send the full block.
+      if (!Thread.currentThread().isInterrupted()) {
+        try {
+          // send an empty packet to mark the end of the block
+          sendPacket(pktBuf, maxChunksPerPacket, streamForSendChunks, transferTo,
+              throttler, opcode);
+          out.flush();
+        } catch (IOException e) { //socket error
+          throw ioeToSocketException(e);
+        }
+
+        sentEntireByteRange = true;
+      }
+    } finally {
+      if ((clientTraceFmt != null) && ClientTraceLog.isDebugEnabled()) {
+        final long endTime = System.nanoTime();
+        ClientTraceLog.debug(String.format(clientTraceFmt, totalRead,
+            initialOffset, endTime - startTime));
+      }
+      close();
+    }
+    return totalRead;
+  }
+
   /**
    * Manage the OS buffer cache by performing read-ahead
    * and drop-behind.
@@ -895,6 +1111,19 @@ class BlockSender implements java.io.Closeable {
     // both syncBlock and syncPacket are false
     PacketHeader header = new PacketHeader(packetLen, offset, seqno,
         (dataLen == 0), dataLen, false);
+    
+    int size = header.getSerializedSize();
+    pkt.position(PacketHeader.PKT_MAX_HEADER_LEN - size);
+    header.putInBuffer(pkt);
+    return size;
+  }
+
+  private int writePacketHeader(ByteBuffer pkt, int dataLen, int packetLen, int opcode) {
+    pkt.clear();
+    // both syncBlock and syncPacket are false
+    System.out.println("opcode in writePacketHeader: " + opcode);
+    PacketHeader header = new PacketHeader(packetLen, offset, seqno,
+        (dataLen == 0), dataLen, false, opcode);
     
     int size = header.getSerializedSize();
     pkt.position(PacketHeader.PKT_MAX_HEADER_LEN - size);

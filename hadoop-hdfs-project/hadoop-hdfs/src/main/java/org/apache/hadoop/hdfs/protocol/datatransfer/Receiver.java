@@ -149,7 +149,19 @@ public abstract class Receiver implements DataTransferProtocol {
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
-      readBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
+      if (proto.hasOpCode()) {
+        readBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
+        PBHelperClient.convert(proto.getHeader().getBaseHeader().getToken()),
+        proto.getHeader().getClientName(),
+        proto.getOffset(),
+        proto.getLen(),
+        proto.getSendChecksums(),
+        (proto.hasCachingStrategy() ?
+            getCachingStrategy(proto.getCachingStrategy()) :
+          CachingStrategy.newDefaultStrategy()),
+        proto.getOpCode());
+      } else {
+        readBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
         PBHelperClient.convert(proto.getHeader().getBaseHeader().getToken()),
         proto.getHeader().getClientName(),
         proto.getOffset(),
@@ -158,6 +170,7 @@ public abstract class Receiver implements DataTransferProtocol {
         (proto.hasCachingStrategy() ?
             getCachingStrategy(proto.getCachingStrategy()) :
           CachingStrategy.newDefaultStrategy()));
+      }
     } finally {
       if (traceScope != null) traceScope.close();
     }

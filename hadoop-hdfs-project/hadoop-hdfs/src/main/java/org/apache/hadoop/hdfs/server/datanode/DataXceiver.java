@@ -222,7 +222,7 @@ class DataXceiver extends Receiver implements Runnable {
   public void run() {
     int opsProcessed = 0;
     Op op = null;
-
+    System.out.println("in server side");
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -254,7 +254,7 @@ class DataXceiver extends Receiver implements Runnable {
       }
       
       super.initialize(new DataInputStream(input));
-      
+      System.out.println("position 1");
       // We process requests in a loop, and stay around for a short timeout.
       // This optimistic behaviour allows the other end to reuse connections.
       // Setting keepalive timeout to 0 disable this behavior.
@@ -672,8 +672,96 @@ class DataXceiver extends Receiver implements Runnable {
       final boolean sendChecksum,
       final CachingStrategy cachingStrategy,
       final int opcode) throws IOException {
-        // TODO
+    previousOpClientName = clientName;
+    long read = 0;
+    updateCurrentThreadName("Sending block " + block);
+    OutputStream baseStream = getOutputStream();
+    DataOutputStream out = getBufferedOutputStream();
+    checkAccess(out, true, block, blockToken, Op.READ_BLOCK,
+        BlockTokenIdentifier.AccessMode.READ);
+
+    // send the block
+    BlockSender blockSender = null;
+    DatanodeRegistration dnR = 
+      datanode.getDNRegistrationForBP(block.getBlockPoolId());
+    final String clientTraceFmt =
+      clientName.length() > 0 && ClientTraceLog.isInfoEnabled()
+        ? String.format(DN_CLIENTTRACE_FORMAT, localAddress, remoteAddress,
+            "%d", "HDFS_READ", clientName, "%d",
+            dnR.getDatanodeUuid(), block, "%d")
+        : dnR + " Served block " + block + " to " +
+            remoteAddress;
+
+    try {
+      try {
+        blockSender = new BlockSender(block, blockOffset, length,
+            true, false, sendChecksum, datanode, clientTraceFmt,
+            cachingStrategy);
+      } catch(IOException e) {
+        String msg = "opReadBlock " + block + " received exception " + e; 
+        LOG.info(msg);
+        sendResponse(ERROR, msg);
+        throw e;
       }
+      // send op status
+      writeSuccessWithChecksumInfo(blockSender, new DataOutputStream(getOutputStream()));
+      long beginRead = Time.monotonicNow();
+      read = blockSender.sendBlock(out, baseStream, null, opcode); // send data with opcode attached
+      long duration = Time.monotonicNow() - beginRead;
+      if (blockSender.didSendEntireByteRange()) {
+        // If we sent the entire range, then we should expect the client
+        // to respond with a Status enum.
+        try {
+          ClientReadStatusProto stat = ClientReadStatusProto.parseFrom(
+              PBHelperClient.vintPrefixed(in));
+          if (!stat.hasStatus()) {
+            LOG.warn("Client {} did not send a valid status code " +
+                "after reading. Will close connection.",
+                peer.getRemoteAddressString());
+            IOUtils.closeStream(out);
+          }
+        } catch (IOException ioe) {
+          LOG.debug("Error reading client status response. Will close connection.", ioe);
+          IOUtils.closeStream(out);
+          incrDatanodeNetworkErrors();
+        }
+      } else {
+        IOUtils.closeStream(out);
+      }
+      datanode.metrics.incrBytesRead((int) read);
+      datanode.metrics.incrBlocksRead();
+      datanode.metrics.incrTotalReadTime(duration);
+    } catch ( SocketException ignored ) {
+      LOG.trace("{}:Ignoring exception while serving {} to {}",
+          dnR, block, remoteAddress, ignored);
+      // Its ok for remote side to close the connection anytime.
+      datanode.metrics.incrBlocksRead();
+      IOUtils.closeStream(out);
+    } catch ( IOException ioe ) {
+      /* What exactly should we do here?
+       * Earlier version shutdown() datanode if there is disk error.
+       */
+      if (!(ioe instanceof SocketTimeoutException)) {
+        LOG.warn("{}:Got exception while serving {} to {}",
+            dnR, block, remoteAddress, ioe);
+        incrDatanodeNetworkErrors();
+      }
+      // Normally the client reports a bad block to the NN. However if the
+      // meta file is corrupt or an disk error occurs (EIO), then the client
+      // never gets a chance to do validation, and hence will never report
+      // the block as bad. For some classes of IO exception, the DN should
+      // report the block as bad, via the handleBadBlock() method
+      datanode.handleBadBlock(block, ioe, false);
+      throw ioe;
+    } finally {
+      IOUtils.closeStream(blockSender);
+    }
+
+    //update metrics
+    datanode.metrics.addReadBlockOp(elapsed());
+    datanode.metrics.incrReadsFromClient(peer.isLocal(), read);
+  }
+
 
   @Override
   public void writeBlock(final ExtendedBlock block,
