@@ -806,10 +806,10 @@ public class DFSInputStream extends FSInputStream
       StorageType storageType, DatanodeInfo datanode) throws IOException {
     
     StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
-    System.out.println("getBlockReader");
-    for (StackTraceElement ste : stackTraceElements) {
-        System.out.println(ste.toString());
-    }
+    // System.out.println("OPCODE TEST: getBlockReader");
+    // for (StackTraceElement ste : stackTraceElements) {
+    //     System.out.println(ste.toString());
+    // }
 
     ExtendedBlock blk = targetBlock.getBlock();
     Token<BlockTokenIdentifier> accessToken = targetBlock.getBlockToken();
@@ -844,10 +844,10 @@ public class DFSInputStream extends FSInputStream
       StorageType storageType, DatanodeInfo datanode, int opcode) throws IOException {
     
     StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
-    System.out.println("getBlockReader with opcode");
-    for (StackTraceElement ste : stackTraceElements) {
-        System.out.println(ste.toString());
-    }
+    // System.out.println("OPCODE TEST: getBlockReader with opcode");
+    // for (StackTraceElement ste : stackTraceElements) {
+    //     System.out.println(ste.toString());
+    // }
 
     ExtendedBlock blk = targetBlock.getBlock();
     Token<BlockTokenIdentifier> accessToken = targetBlock.getBlockToken();
@@ -1157,7 +1157,7 @@ public class DFSInputStream extends FSInputStream
     int len = buf.remaining();
 
     if (len > 12) {
-      System.out.println("hdfsRead");
+      // System.out.println("OPCODE TEST: hdfsRead");
       // extract opcode string
       ByteBuffer tempBuffer = buf.duplicate();
       
@@ -1171,8 +1171,8 @@ public class DFSInputStream extends FSInputStream
       byte inputOpCodeByte = tempBuffer.get();
       String inputOpCodeString = new String(new byte[]{inputOpCodeByte}, StandardCharsets.UTF_8);
 
-      System.out.println("Extracted inputEncodingString: " + inputEncodingString);
-      System.out.println("Extracted inputOpCodeString: " + inputOpCodeString);
+      // System.out.println("OPCODE TEST: Extracted inputEncodingString: " + inputEncodingString);
+      // System.out.println("OPCODE TEST: Extracted inputOpCodeString: " + inputOpCodeString);
 
       // check if opcode string is present
       if (inputEncodingString.trim().equals(opEncodingString)) {
@@ -2135,8 +2135,8 @@ public class DFSInputStream extends FSInputStream
       byte inputOpCodeByte = tempBuffer.get();
       String inputOpCodeString = new String(new byte[]{inputOpCodeByte}, StandardCharsets.UTF_8);
 
-      System.out.println("Extracted inputEncodingString: " + inputEncodingString);
-      System.out.println("Extracted inputOpCodeString: " + inputOpCodeString);
+      // System.out.println("OPCODE TEST: Extracted inputEncodingString: " + inputEncodingString);
+      // System.out.println("OPCODE TEST: Extracted inputOpCodeString: " + inputOpCodeString);
       // check if opcode string is present
       if (inputEncodingString.trim().equals(opEncodingString)) {
           // if present, extract opcode, the first byte after the opcode string and convert to int
@@ -2147,7 +2147,7 @@ public class DFSInputStream extends FSInputStream
           // len = buf.remaining();
       }
     }
-    System.out.println("calling pread with position: " + position);
+    // System.out.println("OPCODE TEST: calling pread with position: " + position);
     if (opcode != -1) {
       return pread(position, buf, opcode);
     }
