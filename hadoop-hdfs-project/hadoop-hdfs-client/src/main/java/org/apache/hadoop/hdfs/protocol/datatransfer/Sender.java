@@ -104,7 +104,7 @@ public class Sender implements DataTransferProtocol {
       final boolean sendChecksum,
       final CachingStrategy cachingStrategy) throws IOException {
     
-    StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
+    // StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
     // System.out.println("OPCODE TEST: create read packet");
     // for (StackTraceElement ste : stackTraceElements) {
     //     System.out.println(ste.toString());
@@ -133,7 +133,7 @@ public class Sender implements DataTransferProtocol {
       final CachingStrategy cachingStrategy,
       final int opcode) throws IOException {
     
-    StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
+    // StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
     // System.out.println("OPCODE TEST: create read packet with opcode:" + opcode);
     // for (StackTraceElement ste : stackTraceElements) {
     //     System.out.println(ste.toString());
