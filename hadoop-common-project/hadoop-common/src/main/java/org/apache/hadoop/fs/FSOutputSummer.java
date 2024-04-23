@@ -261,19 +261,22 @@ abstract public class FSOutputSummer extends OutputStream implements
     String opEncodingString = "$/0/0opCode";
 
     if (lenToFlush != 0) {
+      // Only check if length is greater than the opcode string length
+      if (lenToFlush > opEncodingString.length()) {
+        
+        // extract opcode string
+        String inputEncodingString = new String(
+            Arrays.copyOfRange(buf, bufLen - 1 - opEncodingString.length(), bufLen - 1),
+            StandardCharsets.UTF_8);
+        String inputOpCodeString = new String(buf, bufLen - 1, 1, StandardCharsets.UTF_8);
 
-      // extract opcode string
-      String inputEncodingString = new String(
-          Arrays.copyOfRange(buf, bufLen - 1 - opEncodingString.length(), bufLen - 1),
-          StandardCharsets.UTF_8);
-      String inputOpCodeString = new String(buf, bufLen - 1, 1, StandardCharsets.UTF_8);
-
-      // check if opcode string is present
-      if (inputEncodingString.trim().equals(opEncodingString)) {
-        // if present, extract opcode, the last byte of the array and convert to int
-        opcode = Integer.parseInt(inputOpCodeString);
-        // remove opcode string and opcode from the array
-        lenToFlush = lenToFlush - inputEncodingString.length() - 1;
+        // check if opcode string is present
+        if (inputEncodingString.trim().equals(opEncodingString)) {
+          // if present, extract opcode, the last byte of the array and convert to int
+          opcode = Integer.parseInt(inputOpCodeString);
+          // remove opcode string and opcode from the array
+          lenToFlush = lenToFlush - inputEncodingString.length() - 1;
+        }
       }
 
       if (opcode != -1) {
