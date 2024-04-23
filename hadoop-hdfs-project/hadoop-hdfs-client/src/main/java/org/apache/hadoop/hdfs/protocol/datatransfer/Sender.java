@@ -104,11 +104,11 @@ public class Sender implements DataTransferProtocol {
       final boolean sendChecksum,
       final CachingStrategy cachingStrategy) throws IOException {
     
-    StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
-    System.out.println("create read packet");
-    for (StackTraceElement ste : stackTraceElements) {
-        System.out.println(ste.toString());
-    }
+    // StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
+    // System.out.println("OPCODE TEST: create read packet");
+    // for (StackTraceElement ste : stackTraceElements) {
+    //     System.out.println(ste.toString());
+    // }
     OpReadBlockProto proto = OpReadBlockProto.newBuilder()
         .setHeader(DataTransferProtoUtil.buildClientHeader(blk, clientName,
             blockToken))
@@ -133,11 +133,11 @@ public class Sender implements DataTransferProtocol {
       final CachingStrategy cachingStrategy,
       final int opcode) throws IOException {
     
-    StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
-    System.out.println("create read packet with opcode:" + opcode);
-    for (StackTraceElement ste : stackTraceElements) {
-        System.out.println(ste.toString());
-    }
+    // StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();      
+    // System.out.println("OPCODE TEST: create read packet with opcode:" + opcode);
+    // for (StackTraceElement ste : stackTraceElements) {
+    //     System.out.println(ste.toString());
+    // }
     OpReadBlockProto proto = OpReadBlockProto.newBuilder()
         .setHeader(DataTransferProtoUtil.buildClientHeader(blk, clientName,
             blockToken))

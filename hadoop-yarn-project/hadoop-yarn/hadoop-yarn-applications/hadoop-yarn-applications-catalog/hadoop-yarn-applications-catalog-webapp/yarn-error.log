@@ -1,0 +1,55 @@
+Arguments: 
+  /home/viraj/hadoop-op-aware/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-applications/hadoop-yarn-applications-catalog/hadoop-yarn-applications-catalog-webapp/target/node/node /home/viraj/hadoop-op-aware/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-applications/hadoop-yarn-applications-catalog/hadoop-yarn-applications-catalog-webapp/target/node/yarn/dist/bin/yarn.js
+
+PATH: 
+  /home/viraj/hadoop-op-aware/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-applications/hadoop-yarn-applications-catalog/hadoop-yarn-applications-catalog-webapp/target/node/yarn/dist/bin:/home/viraj/hadoop-op-aware/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-applications/hadoop-yarn-applications-catalog/hadoop-yarn-applications-catalog-webapp/target/node:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/opt/mellanox/doca/tools/:/opt/netronome/drv:
+
+Yarn version: 
+  1.7.0
+
+Node version: 
+  8.11.3
+
+Platform: 
+  linux x64
+
+Trace: 
+  Error: https://registry.yarnpkg.com/jquery: ETIMEDOUT
+      at Timeout._onTimeout (/home/viraj/hadoop-op-aware/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-applications/hadoop-yarn-applications-catalog/hadoop-yarn-applications-catalog-webapp/target/node/yarn/dist/lib/cli.js:135339:19)
+      at ontimeout (timers.js:498:11)
+      at tryOnTimeout (timers.js:323:5)
+      at Timer.listOnTimeout (timers.js:290:5)
+
+npm manifest: 
+  {
+      "name": "AppCatalog",
+      "private": true,
+      "version": "0.0.0",
+      "description": "YARN App Catalog",
+      "repository": "git://git.apache.org/hadoop.git",
+      "license": "Apache 2.0",
+      "dependencies": {
+          "jquery": "3.3.1",
+          "angular-loader": "~1.6.4",
+          "angular-mocks": "~1.6.4",
+          "angular-route": "~1.6.4",
+          "angular": "~1.6.4",
+          "bootstrap": "~3.3.7",
+          "roboto-fontface": "0.10.0"
+      },
+      "devDependencies": {
+          "requirejs": "^2.1.0",
+          "shelljs": "^0.2.6",
+          "apidoc": "0.17.7"
+      },
+      "scripts": {
+          "prestart": "npm install & mvn clean package",
+          "pretest": "npm install"
+      }
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
